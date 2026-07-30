@@ -1,0 +1,33 @@
+# Etapa de Compilación
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copia de archivos de configuración y dependencias
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/isabella-core ./packages/isabella-core
+
+RUN npm install -g pnpm
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter isabella-core build
+
+# Etapa de Ejecución de Producción
+FROM node:20-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV ISABELLA_CORE_VERSION="v4.0-enterprise"
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 isabella
+
+COPY --from=builder /app/packages/isabella-core/dist ./dist
+COPY --from=builder /app/packages/isabella-core/package.json ./package.json
+COPY --from=builder /app/node_modules ./node_modules
+
+USER isabella
+
+EXPOSE 8080
+
+CMD ["node", "dist/index.js"]
